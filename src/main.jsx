@@ -9,12 +9,14 @@ import {
   Home,
   Import,
   Layers,
+  Moon,
   Pencil,
   Play,
   Plus,
   RotateCcw,
   Save,
   Search,
+  Sun,
   Trash2,
   Upload,
   Volume2,
@@ -36,6 +38,7 @@ import { downloadBlob, parseCsv, rowsToCsv } from "./utils.js";
 
 const todayKey = () => new Date().toISOString().slice(0, 10);
 const VOICE_STORAGE_KEY = "frases-ingles-voice-choice";
+const THEME_STORAGE_KEY = "frases-ingles-theme";
 const MALE_VOICE_PATTERN = /alex|daniel|david|fred|guy|mark|tom|aaron|arthur|brian|christopher|eric|george|liam|oliver|ryan/i;
 const FEMALE_VOICE_PATTERN = /samantha|karen|susan|victoria|zira|jenny|aria|ava|emma|joanna|salli|serena/i;
 
@@ -122,6 +125,7 @@ function App() {
   const [audioMode, setAudioMode] = useState("normal");
   const [categoryFilter, setCategoryFilter] = useState("Todas");
   const [query, setQuery] = useState("");
+  const [theme, setTheme] = useState(() => localStorage.getItem(THEME_STORAGE_KEY) || "light");
   const { speak, preferredVoice, englishVoices, voiceChoice, setVoiceChoice } = useSpeech();
 
   async function refresh() {
@@ -136,6 +140,11 @@ function App() {
       navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch(() => {});
     }
   }, []);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem(THEME_STORAGE_KEY, theme);
+  }, [theme]);
 
   const stats = useMemo(() => {
     const due = phrases.filter(isDue);
@@ -226,9 +235,19 @@ function App() {
           <p className="eyebrow">PWA pessoal</p>
           <h1>Frases em Ingles</h1>
         </div>
-        <button className="icon-button" onClick={() => setView("home")} aria-label="Inicio" title="Inicio">
-          <Home size={22} />
-        </button>
+        <div className="top-actions">
+          <button
+            className="icon-button"
+            onClick={() => setTheme((current) => (current === "dark" ? "light" : "dark"))}
+            aria-label={theme === "dark" ? "Usar tema claro" : "Usar tema escuro"}
+            title={theme === "dark" ? "Tema claro" : "Tema escuro"}
+          >
+            {theme === "dark" ? <Sun size={22} /> : <Moon size={22} />}
+          </button>
+          <button className="icon-button" onClick={() => setView("home")} aria-label="Inicio" title="Inicio">
+            <Home size={22} />
+          </button>
+        </div>
       </header>
 
       {view === "home" && (
