@@ -1,6 +1,6 @@
-# Frases em Ingles SRS
+# Smart English Cards
 
-App PWA simples para estudar frases em ingles com repeticao espacada, audio por Web Speech API e banco local no IndexedDB.
+App PWA simples para estudar ingles com flashcards, leitura, audio por Web Speech API, destaques visuais e repeticao espacada com banco local no IndexedDB.
 
 ## Stack
 
@@ -27,7 +27,7 @@ npm run preview
 
 ## Publicar no GitHub Pages
 
-1. Crie um repositorio no GitHub, por exemplo `frases-ingles-srs`.
+1. Crie um repositorio no GitHub, por exemplo `Smart-English-Cards`.
 2. Envie estes arquivos para o repositorio, sem a pasta `node_modules`.
 3. No GitHub, abra **Settings > Pages**.
 4. Em **Build and deployment**, escolha **GitHub Actions**.
@@ -36,7 +36,7 @@ npm run preview
 Depois que a Action terminar, o app ficara em um endereco parecido com:
 
 ```text
-https://seu-usuario.github.io/frases-ingles-srs/
+https://seu-usuario.github.io/Smart-English-Cards/
 ```
 
 ## Importacao CSV

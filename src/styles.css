@@ -108,6 +108,21 @@ button:disabled {
   gap: 8px;
 }
 
+.brand-lockup {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.app-logo {
+  width: 48px;
+  height: 48px;
+  flex: 0 0 auto;
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+}
+
 .topbar h1,
 .section-heading h2,
 .empty-state h2 {
@@ -346,6 +361,75 @@ button:disabled {
   font-weight: 800;
 }
 
+.highlight-toolbar {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.highlight-toolbar button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 38px;
+  padding: 0 11px;
+  border-radius: 8px;
+  background: var(--surface-action);
+  color: var(--text);
+  font-size: 0.84rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.highlight-toolbar .blue {
+  color: #2563eb;
+}
+
+.highlight-toolbar .amber {
+  color: #b45309;
+}
+
+.highlight-toolbar .green {
+  color: #15803d;
+}
+
+.text-highlight {
+  border-radius: 5px;
+  padding: 0 0.16em;
+  background: transparent;
+  color: inherit;
+  font-weight: 900;
+}
+
+.text-highlight.blue {
+  color: #2563eb;
+}
+
+.text-highlight.amber {
+  color: #b45309;
+}
+
+.text-highlight.green {
+  color: #15803d;
+}
+
+:root[data-theme="dark"] .text-highlight.blue,
+:root[data-theme="dark"] .highlight-toolbar .blue {
+  color: #93c5fd;
+}
+
+:root[data-theme="dark"] .text-highlight.amber,
+:root[data-theme="dark"] .highlight-toolbar .amber {
+  color: #fbbf24;
+}
+
+:root[data-theme="dark"] .text-highlight.green,
+:root[data-theme="dark"] .highlight-toolbar .green {
+  color: #86efac;
+}
+
 .phrase-form input,
 .phrase-form textarea,
 .phrase-form select {
@@ -550,6 +634,12 @@ button:disabled {
   line-height: 1.18;
 }
 
+.study-prompt.answered {
+  color: var(--text-muted);
+  font-size: 1.08rem;
+  font-weight: 750;
+}
+
 .answer {
   display: grid;
   gap: 16px;
@@ -561,6 +651,15 @@ button:disabled {
   line-height: 1.3;
   color: var(--primary);
   font-weight: 800;
+}
+
+.answer > .answer-text {
+  padding: 16px;
+  border-radius: 8px;
+  background: var(--surface-soft);
+  font-size: 1.72rem;
+  line-height: 1.22;
+  box-shadow: inset 0 0 0 1px var(--border);
 }
 
 .audio-controls {

@@ -1,9 +1,10 @@
-const CACHE_NAME = "frases-ingles-srs-v3";
+const CACHE_NAME = "smart-english-cards-v4";
 const BASE_URL = self.registration.scope;
 const ASSETS = [
   BASE_URL,
   `${BASE_URL}index.html`,
   `${BASE_URL}manifest.webmanifest`,
+  `${BASE_URL}icons/logo.svg`,
   `${BASE_URL}icons/icon.svg`,
   `${BASE_URL}icons/icon-192.png`,
   `${BASE_URL}icons/icon-512.png`

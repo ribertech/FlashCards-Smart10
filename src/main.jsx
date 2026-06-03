@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   BookOpen,
+  Bold,
+  Brush,
   CalendarCheck,
   ChevronLeft,
   ChevronRight,
@@ -44,6 +46,7 @@ import {
 import { CATEGORIES, createEmptyPhrase, isDue, reviewPhrase } from "./srs.js";
 import { downloadBlob, parseCsv, rowsToCsv } from "./utils.js";
 
+const APP_NAME = "Smart English Cards";
 const todayKey = () => new Date().toISOString().slice(0, 10);
 const VOICE_STORAGE_KEY = "frases-ingles-voice-choice";
 const THEME_STORAGE_KEY = "frases-ingles-theme";
@@ -291,9 +294,12 @@ function App() {
   return (
     <main className="app-shell">
       <header className="topbar">
-        <div>
-          <p className="eyebrow">PWA pessoal</p>
-          <h1>Frases em Ingles</h1>
+        <div className="brand-lockup">
+          <img src={`${import.meta.env.BASE_URL}icons/logo.svg`} alt="" className="app-logo" />
+          <div>
+            <p className="eyebrow">PWA pessoal</p>
+            <h1>{APP_NAME}</h1>
+          </div>
         </div>
         <div className="top-actions">
           <button
@@ -508,7 +514,9 @@ function StudyView({
       <div className="study-progress">{remaining} restantes</div>
       <article className="study-card">
         <p className="eyebrow">{card.category}</p>
-        <h2>{card.studyDirection === "en-pt" ? card.english : card.portuguese}</h2>
+        <h2 className={`study-prompt ${answerVisible ? "answered" : ""}`}>
+          {renderFormattedText(card.studyDirection === "en-pt" ? card.english : card.portuguese)}
+        </h2>
 
         {!answerVisible ? (
           <button className="primary-action wide" onClick={() => setAnswerVisible(true)}>
@@ -516,7 +524,9 @@ function StudyView({
           </button>
         ) : (
           <div className="answer">
-            <p>{card.studyDirection === "en-pt" ? card.portuguese : card.english}</p>
+            <p className="answer-text">
+              {renderFormattedText(card.studyDirection === "en-pt" ? card.portuguese : card.english)}
+            </p>
             {card.studyDirection === "en-pt" ? (
               <button className="listen-button" onClick={() => speak(card.english, audioMode)}>
                 <Volume2 size={20} /> Ouvir ingles
@@ -620,8 +630,8 @@ function LibraryView({
           <article className="phrase-card" key={phrase.id}>
             <div>
               <span>{phrase.category}</span>
-              <h3>{phrase.portuguese}</h3>
-              <p>{phrase.english}</p>
+              <h3>{renderFormattedText(phrase.portuguese)}</h3>
+              <p>{renderFormattedText(phrase.english)}</p>
             </div>
             <div className="phrase-actions">
               <button onClick={() => speak(phrase.english)} aria-label="Ouvir" title="Ouvir"><Volume2 size={18} /></button>
@@ -637,9 +647,31 @@ function LibraryView({
 
 function PhraseForm({ phrase, onCancel, onSave }) {
   const [draft, setDraft] = useState(phrase);
+  const portugueseRef = React.useRef(null);
+  const englishRef = React.useRef(null);
 
   function update(field, value) {
     setDraft((current) => ({ ...current, [field]: value }));
+  }
+
+  function applyHighlight(field, ref, type) {
+    const target = ref.current;
+    if (!target) return;
+    const start = target.selectionStart;
+    const end = target.selectionEnd;
+    const selected = draft[field].slice(start, end);
+    if (!selected) {
+      alert("Selecione uma palavra ou expressao no campo antes de destacar.");
+      return;
+    }
+
+    const wrapped = wrapHighlight(selected, type);
+    const nextValue = `${draft[field].slice(0, start)}${wrapped}${draft[field].slice(end)}`;
+    update(field, nextValue);
+    requestAnimationFrame(() => {
+      target.focus();
+      target.setSelectionRange(start, start + wrapped.length);
+    });
   }
 
   function submit(event) {
@@ -663,11 +695,13 @@ function PhraseForm({ phrase, onCancel, onSave }) {
       <form className="phrase-form" onSubmit={submit}>
         <label>
           Portugues
-          <textarea value={draft.portuguese} onChange={(event) => update("portuguese", event.target.value)} rows={3} />
+          <textarea ref={portugueseRef} value={draft.portuguese} onChange={(event) => update("portuguese", event.target.value)} rows={3} />
+          <HighlightToolbar onApply={(type) => applyHighlight("portuguese", portugueseRef, type)} />
         </label>
         <label>
           Ingles
-          <textarea value={draft.english} onChange={(event) => update("english", event.target.value)} rows={3} />
+          <textarea ref={englishRef} value={draft.english} onChange={(event) => update("english", event.target.value)} rows={3} />
+          <HighlightToolbar onApply={(type) => applyHighlight("english", englishRef, type)} />
         </label>
         <label>
           Categoria
@@ -684,6 +718,25 @@ function PhraseForm({ phrase, onCancel, onSave }) {
         </button>
       </form>
     </section>
+  );
+}
+
+function HighlightToolbar({ onApply }) {
+  return (
+    <div className="highlight-toolbar" aria-label="Destaques do texto">
+      <button type="button" onClick={() => onApply("bold")} title="Negrito">
+        <Bold size={16} /> Negrito
+      </button>
+      <button type="button" className="swatch blue" onClick={() => onApply("blue")} title="Azul">
+        <Brush size={16} /> Azul
+      </button>
+      <button type="button" className="swatch amber" onClick={() => onApply("amber")} title="Dourado">
+        Dourado
+      </button>
+      <button type="button" className="swatch green" onClick={() => onApply("green")} title="Verde">
+        Verde
+      </button>
+    </div>
   );
 }
 
@@ -1034,6 +1087,34 @@ function decodeHtml(text) {
 
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function wrapHighlight(text, type) {
+  if (type === "bold") return `**${text}**`;
+  return `[${type}]${text}[/${type}]`;
+}
+
+function renderFormattedText(text = "") {
+  const nodes = [];
+  const pattern = /(\*\*[^*]+\*\*|\[(blue|amber|green)\][\s\S]*?\[\/\2\])/g;
+  let lastIndex = 0;
+  let match;
+
+  while ((match = pattern.exec(text)) !== null) {
+    if (match.index > lastIndex) nodes.push(text.slice(lastIndex, match.index));
+    const token = match[0];
+    if (token.startsWith("**")) {
+      nodes.push(<strong key={`${match.index}-bold`}>{token.slice(2, -2)}</strong>);
+    } else {
+      const color = match[2];
+      const content = token.replace(new RegExp(`^\\[${color}\\]|\\[/${color}\\]$`, "g"), "");
+      nodes.push(<mark key={`${match.index}-${color}`} className={`text-highlight ${color}`}>{content}</mark>);
+    }
+    lastIndex = pattern.lastIndex;
+  }
+
+  if (lastIndex < text.length) nodes.push(text.slice(lastIndex));
+  return nodes.length > 0 ? nodes : text;
 }
 
 function calculateStreak(days) {
