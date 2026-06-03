@@ -819,6 +819,7 @@ function ReaderView({ reading, onBack, onEdit, onUpdate, onSaveFlashcard, speak,
   const [rate, setRate] = useState(1);
   const [autoAdvance, setAutoAdvance] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isTranslating, setIsTranslating] = useState(false);
   const [selection, setSelection] = useState("");
 
   const sentences = reading?.sentences ?? [];
@@ -846,6 +847,43 @@ function ReaderView({ reading, onBack, onEdit, onUpdate, onSaveFlashcard, speak,
       index === currentIndex ? { ...item, translation, read: true, ...patch } : item
     );
     await onUpdate({ ...reading, sentences: nextSentences, currentIndex });
+  }
+
+  async function translateCurrentSentence() {
+    setIsTranslating(true);
+    try {
+      const translated = await translateToPortuguese(sentence.english);
+      setTranslation(translated);
+      await persistSentence({ translation: translated, read: true });
+    } catch (error) {
+      alert("Nao consegui traduzir automaticamente agora. Voce ainda pode preencher a traducao manualmente.");
+    } finally {
+      setIsTranslating(false);
+    }
+  }
+
+  async function translateMissingSentences() {
+    const confirmed = window.confirm("Traduzir automaticamente as frases sem traducao? Em textos longos isso pode demorar e a API gratuita pode limitar requisicoes.");
+    if (!confirmed) return;
+
+    setIsTranslating(true);
+    try {
+      const nextSentences = [];
+      for (const item of sentences) {
+        if (item.translation?.trim()) {
+          nextSentences.push(item);
+        } else {
+          const translated = await translateToPortuguese(item.english);
+          nextSentences.push({ ...item, translation: translated });
+          await wait(450);
+        }
+      }
+      await onUpdate({ ...reading, sentences: nextSentences, currentIndex });
+    } catch (error) {
+      alert("A traducao automatica parou antes do fim. Algumas frases podem ter ficado sem traducao.");
+    } finally {
+      setIsTranslating(false);
+    }
   }
 
   async function move(delta) {
@@ -909,7 +947,15 @@ function ReaderView({ reading, onBack, onEdit, onUpdate, onSaveFlashcard, speak,
           Traducao em portugues
           <textarea value={translation} onChange={(event) => setTranslation(event.target.value)} rows={4} />
         </label>
-        <p className="translation-note">Sem API conectada ainda: traduza ou ajuste manualmente. A estrutura ja salva a traducao por frase.</p>
+        <div className="translation-actions">
+          <button onClick={translateCurrentSentence} disabled={isTranslating}>
+            {isTranslating ? "Traduzindo..." : "Traduzir frase"}
+          </button>
+          <button onClick={translateMissingSentences} disabled={isTranslating}>
+            Traduzir texto
+          </button>
+        </div>
+        <p className="translation-note">A traducao automatica usa uma API publica gratuita quando disponivel. Revise o resultado antes de transformar em flashcard.</p>
       </article>
 
       <div className="reader-controls">
@@ -969,6 +1015,25 @@ function buildSentences(text, existingSentences = []) {
         read: previous?.read || false
       };
     });
+}
+
+async function translateToPortuguese(text) {
+  const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en|pt-BR`;
+  const response = await fetch(url);
+  if (!response.ok) throw new Error("translation request failed");
+  const data = await response.json();
+  const translated = data?.responseData?.translatedText;
+  if (!translated) throw new Error("empty translation");
+  return decodeHtml(translated);
+}
+
+function decodeHtml(text) {
+  const parser = new DOMParser();
+  return parser.parseFromString(text, "text/html").documentElement.textContent || text;
+}
+
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function calculateStreak(days) {

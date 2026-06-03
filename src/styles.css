@@ -454,6 +454,25 @@ button:disabled {
   font-size: 0.9rem;
 }
 
+.translation-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.translation-actions button {
+  min-height: 48px;
+  border-radius: 8px;
+  background: var(--surface-action);
+  color: var(--text);
+  font-weight: 800;
+}
+
+.translation-actions button:first-child {
+  background: var(--primary);
+  color: var(--primary-contrast);
+}
+
 .reader-controls {
   display: grid;
   grid-template-columns: 1fr 1.2fr 1fr;
