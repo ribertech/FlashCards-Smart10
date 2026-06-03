@@ -1,4 +1,4 @@
-const CACHE_NAME = "frases-ingles-srs-v1";
+const CACHE_NAME = "frases-ingles-srs-v2";
 const BASE_URL = self.registration.scope;
 const ASSETS = [
   BASE_URL,

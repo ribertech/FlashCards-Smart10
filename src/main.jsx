@@ -3,7 +3,10 @@ import { createRoot } from "react-dom/client";
 import {
   BookOpen,
   CalendarCheck,
+  ChevronLeft,
+  ChevronRight,
   Download,
+  FileText,
   Flame,
   Headphones,
   Home,
@@ -11,6 +14,7 @@ import {
   Layers,
   Moon,
   Pencil,
+  Pause,
   Play,
   Plus,
   RotateCcw,
@@ -25,13 +29,17 @@ import {
 import "./styles.css";
 import {
   deletePhrase,
+  deleteReading,
   exportRows,
   getAllPhrases,
+  getAllReadings,
   getMeta,
   importRows,
   recordStudyDay,
+  saveReading,
   savePhrase,
-  seedIfNeeded
+  seedIfNeeded,
+  createEmptyReading
 } from "./storage.js";
 import { CATEGORIES, createEmptyPhrase, isDue, reviewPhrase } from "./srs.js";
 import { downloadBlob, parseCsv, rowsToCsv } from "./utils.js";
@@ -91,7 +99,7 @@ function useSpeech() {
     );
   }, [englishVoices, voiceChoice, voices]);
 
-  function speak(text, mode = "normal") {
+  function speak(text, mode = "normal", options = {}) {
     if (!("speechSynthesis" in window)) {
       alert("Seu navegador nao suporta audio por Web Speech API.");
       return;
@@ -99,7 +107,7 @@ function useSpeech() {
 
     window.speechSynthesis.cancel();
     const repeat = mode === "repeat" ? 2 : 1;
-    const rate = mode === "slow" ? 0.72 : 0.95;
+    const rate = options.rate ?? (mode === "slow" ? 0.72 : 0.95);
 
     for (let index = 0; index < repeat; index += 1) {
       const utterance = new SpeechSynthesisUtterance(text);
@@ -107,18 +115,26 @@ function useSpeech() {
       utterance.rate = rate;
       utterance.pitch = 1;
       if (preferredVoice) utterance.voice = preferredVoice;
+      if (index === repeat - 1 && options.onEnd) utterance.onend = options.onEnd;
       window.speechSynthesis.speak(utterance);
     }
   }
 
-  return { speak, preferredVoice, englishVoices, voiceChoice, setVoiceChoice };
+  function stop() {
+    window.speechSynthesis?.cancel();
+  }
+
+  return { speak, stop, preferredVoice, englishVoices, voiceChoice, setVoiceChoice };
 }
 
 function App() {
   const [phrases, setPhrases] = useState([]);
+  const [readings, setReadings] = useState([]);
   const [meta, setMeta] = useState({ studyDays: [] });
   const [view, setView] = useState("home");
   const [editing, setEditing] = useState(null);
+  const [editingReading, setEditingReading] = useState(null);
+  const [activeReadingId, setActiveReadingId] = useState("");
   const [studyQueue, setStudyQueue] = useState([]);
   const [studyIndex, setStudyIndex] = useState(0);
   const [answerVisible, setAnswerVisible] = useState(false);
@@ -126,11 +142,12 @@ function App() {
   const [categoryFilter, setCategoryFilter] = useState("Todas");
   const [query, setQuery] = useState("");
   const [theme, setTheme] = useState(() => localStorage.getItem(THEME_STORAGE_KEY) || "light");
-  const { speak, preferredVoice, englishVoices, voiceChoice, setVoiceChoice } = useSpeech();
+  const { speak, stop, preferredVoice, englishVoices, voiceChoice, setVoiceChoice } = useSpeech();
 
   async function refresh() {
     await seedIfNeeded();
     setPhrases(await getAllPhrases());
+    setReadings(await getAllReadings());
     setMeta(await getMeta());
   }
 
@@ -190,6 +207,49 @@ function App() {
     if (!confirmed) return;
     await deletePhrase(id);
     await refresh();
+  }
+
+  async function handleSaveReading(reading) {
+    const sentences = buildSentences(reading.originalText, reading.sentences);
+    const saved = await saveReading({
+      ...reading,
+      sentences,
+      currentIndex: Math.min(reading.currentIndex ?? 0, Math.max(sentences.length - 1, 0))
+    });
+    setEditingReading(null);
+    setActiveReadingId(saved.id);
+    await refresh();
+    setView("reader");
+  }
+
+  async function handleDeleteReading(id) {
+    const confirmed = window.confirm("Excluir este texto?");
+    if (!confirmed) return;
+    await deleteReading(id);
+    await refresh();
+    setView("readings");
+  }
+
+  async function updateReading(reading) {
+    const saved = await saveReading(reading);
+    setReadings((current) => current.map((item) => (item.id === saved.id ? saved : item)));
+    setActiveReadingId(saved.id);
+    return saved;
+  }
+
+  async function saveReadingFlashcard(reading, sentence, selectedText = "") {
+    const english = selectedText.trim() || sentence.english;
+    await savePhrase({
+      ...createEmptyPhrase(),
+      english,
+      portuguese: sentence.translation || "",
+      category: "Leitura em Ingles",
+      notes: `Referencia: ${reading.title}`,
+      studyDirection: "en-pt",
+      referenceTitle: reading.title
+    });
+    await refresh();
+    alert("Flashcard salvo para revisao.");
   }
 
   async function grade(rating) {
@@ -307,6 +367,48 @@ function App() {
         <DataView onExport={handleExport} onImport={handleImport} />
       )}
 
+      {view === "readings" && (
+        <ReadingsLibrary
+          readings={readings}
+          onNew={() => {
+            setEditingReading(createEmptyReading());
+            setView("readingForm");
+          }}
+          onEdit={(reading) => {
+            setEditingReading(reading);
+            setView("readingForm");
+          }}
+          onDelete={handleDeleteReading}
+          onOpen={(reading) => {
+            setActiveReadingId(reading.id);
+            setView("reader");
+          }}
+        />
+      )}
+
+      {view === "readingForm" && (
+        <ReadingForm
+          reading={editingReading ?? createEmptyReading()}
+          onCancel={() => setView("readings")}
+          onSave={handleSaveReading}
+        />
+      )}
+
+      {view === "reader" && (
+        <ReaderView
+          reading={readings.find((item) => item.id === activeReadingId)}
+          onBack={() => setView("readings")}
+          onEdit={(reading) => {
+            setEditingReading(reading);
+            setView("readingForm");
+          }}
+          onUpdate={updateReading}
+          onSaveFlashcard={saveReadingFlashcard}
+          speak={speak}
+          stop={stop}
+        />
+      )}
+
       <nav className="bottom-nav" aria-label="Navegacao principal">
         <button className={view === "home" ? "active" : ""} onClick={() => setView("home")}>
           <Home size={20} /> Inicio
@@ -316,6 +418,9 @@ function App() {
         </button>
         <button className={view === "library" || view === "form" ? "active" : ""} onClick={() => setView("library")}>
           <Layers size={20} /> Frases
+        </button>
+        <button className={view === "readings" || view === "reader" || view === "readingForm" ? "active" : ""} onClick={() => setView("readings")}>
+          <FileText size={20} /> Leitura
         </button>
         <button className={view === "data" ? "active" : ""} onClick={() => setView("data")}>
           <Upload size={20} /> Dados
@@ -403,7 +508,7 @@ function StudyView({
       <div className="study-progress">{remaining} restantes</div>
       <article className="study-card">
         <p className="eyebrow">{card.category}</p>
-        <h2>{card.portuguese}</h2>
+        <h2>{card.studyDirection === "en-pt" ? card.english : card.portuguese}</h2>
 
         {!answerVisible ? (
           <button className="primary-action wide" onClick={() => setAnswerVisible(true)}>
@@ -411,16 +516,22 @@ function StudyView({
           </button>
         ) : (
           <div className="answer">
-            <p>{card.english}</p>
-            <AudioControls
-              text={card.english}
-              speak={speak}
-              mode={audioMode}
-              setMode={setAudioMode}
-              voiceChoice={voiceChoice}
-              setVoiceChoice={setVoiceChoice}
-              voices={voices}
-            />
+            <p>{card.studyDirection === "en-pt" ? card.portuguese : card.english}</p>
+            {card.studyDirection === "en-pt" ? (
+              <button className="listen-button" onClick={() => speak(card.english, audioMode)}>
+                <Volume2 size={20} /> Ouvir ingles
+              </button>
+            ) : (
+              <AudioControls
+                text={card.english}
+                speak={speak}
+                mode={audioMode}
+                setMode={setAudioMode}
+                voiceChoice={voiceChoice}
+                setVoiceChoice={setVoiceChoice}
+                voices={voices}
+              />
+            )}
             {card.notes && <div className="notes">{card.notes}</div>}
             <div className="grade-grid">
               <button className="again" onClick={() => grade("again")}>Errei</button>
@@ -601,6 +712,263 @@ function DataView({ onExport, onImport }) {
       </div>
     </section>
   );
+}
+
+function ReadingsLibrary({ readings, onNew, onEdit, onDelete, onOpen }) {
+  return (
+    <section className="screen">
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">{readings.length} textos</p>
+          <h2>Leitura em Ingles</h2>
+        </div>
+        <button className="icon-button filled" onClick={onNew} aria-label="Novo texto" title="Novo texto">
+          <Plus size={22} />
+        </button>
+      </div>
+
+      <div className="tip-box">
+        <FileText size={20} />
+        <p>Cadastre apenas textos proprios, trechos autorizados ou obras em dominio publico.</p>
+      </div>
+
+      <div className="phrase-list">
+        {readings.map((reading) => {
+          const total = reading.sentences?.length ?? 0;
+          const readCount = reading.sentences?.filter((sentence) => sentence.read).length ?? 0;
+          const percent = total === 0 ? 0 : Math.round((readCount / total) * 100);
+          return (
+            <article className="reading-card" key={reading.id}>
+              <button className="reading-main" onClick={() => onOpen(reading)}>
+                <span>{reading.category}</span>
+                <h3>{reading.title}</h3>
+                <p>{reading.source || "Sem autor/fonte"}</p>
+                <div className="progress-track">
+                  <div style={{ width: `${percent}%` }} />
+                </div>
+                <small>{readCount}/{total} frases lidas - {percent}% concluido</small>
+              </button>
+              <div className="phrase-actions">
+                <button onClick={() => onEdit(reading)} aria-label="Editar" title="Editar"><Pencil size={18} /></button>
+                <button onClick={() => onDelete(reading.id)} aria-label="Excluir" title="Excluir"><Trash2 size={18} /></button>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function ReadingForm({ reading, onCancel, onSave }) {
+  const [draft, setDraft] = useState(reading);
+
+  function update(field, value) {
+    setDraft((current) => ({ ...current, [field]: value }));
+  }
+
+  function submit(event) {
+    event.preventDefault();
+    if (!draft.title.trim() || !draft.originalText.trim()) {
+      alert("Preencha titulo e texto em ingles.");
+      return;
+    }
+    onSave(draft);
+  }
+
+  return (
+    <section className="screen">
+      <div className="section-heading">
+        <h2>{draft.id ? "Editar leitura" : "Nova leitura"}</h2>
+        <button className="icon-button" onClick={onCancel} aria-label="Cancelar" title="Cancelar">
+          <X size={22} />
+        </button>
+      </div>
+
+      <form className="phrase-form" onSubmit={submit}>
+        <label>
+          Titulo
+          <input value={draft.title} onChange={(event) => update("title", event.target.value)} />
+        </label>
+        <label>
+          Autor ou fonte
+          <input value={draft.source} onChange={(event) => update("source", event.target.value)} />
+        </label>
+        <label>
+          Categoria
+          <input value={draft.category} onChange={(event) => update("category", event.target.value)} />
+        </label>
+        <label>
+          Texto original em ingles
+          <textarea value={draft.originalText} onChange={(event) => update("originalText", event.target.value)} rows={10} />
+        </label>
+        <label>
+          Observacoes pessoais
+          <textarea value={draft.notes} onChange={(event) => update("notes", event.target.value)} rows={3} />
+        </label>
+        <button className="primary-action wide" type="submit">
+          <Save size={20} /> Salvar leitura
+        </button>
+      </form>
+    </section>
+  );
+}
+
+function ReaderView({ reading, onBack, onEdit, onUpdate, onSaveFlashcard, speak, stop }) {
+  const [translation, setTranslation] = useState("");
+  const [rate, setRate] = useState(1);
+  const [autoAdvance, setAutoAdvance] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [selection, setSelection] = useState("");
+
+  const sentences = reading?.sentences ?? [];
+  const currentIndex = Math.min(reading?.currentIndex ?? 0, Math.max(sentences.length - 1, 0));
+  const sentence = sentences[currentIndex];
+
+  useEffect(() => {
+    setTranslation(sentence?.translation ?? "");
+    setSelection("");
+    setIsPlaying(false);
+  }, [sentence?.id]);
+
+  if (!reading || !sentence) {
+    return (
+      <section className="screen empty-state">
+        <FileText size={42} />
+        <h2>Nenhum texto aberto</h2>
+        <button className="primary-action" onClick={onBack}>Voltar</button>
+      </section>
+    );
+  }
+
+  async function persistSentence(patch = {}) {
+    const nextSentences = sentences.map((item, index) =>
+      index === currentIndex ? { ...item, translation, read: true, ...patch } : item
+    );
+    await onUpdate({ ...reading, sentences: nextSentences, currentIndex });
+  }
+
+  async function move(delta) {
+    await persistSentence();
+    const nextIndex = Math.min(Math.max(currentIndex + delta, 0), sentences.length - 1);
+    await onUpdate({ ...reading, sentences: sentences.map((item, index) => index === currentIndex ? { ...item, translation, read: true } : item), currentIndex: nextIndex });
+  }
+
+  function playCurrent() {
+    if (isPlaying) {
+      stop();
+      setIsPlaying(false);
+      return;
+    }
+
+    setIsPlaying(true);
+    speak(sentence.english, "normal", {
+      rate,
+      onEnd: async () => {
+        setIsPlaying(false);
+        await persistSentence();
+        if (autoAdvance && currentIndex < sentences.length - 1) {
+          await onUpdate({
+            ...reading,
+            sentences: sentences.map((item, index) => index === currentIndex ? { ...item, translation, read: true } : item),
+            currentIndex: currentIndex + 1
+          });
+        }
+      }
+    });
+  }
+
+  const readCount = sentences.filter((item) => item.read).length;
+  const percent = Math.round((readCount / sentences.length) * 100);
+
+  return (
+    <section className="screen reader-screen">
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">{currentIndex + 1} de {sentences.length}</p>
+          <h2>{reading.title}</h2>
+        </div>
+        <button className="icon-button" onClick={() => onEdit(reading)} aria-label="Editar texto" title="Editar texto">
+          <Pencil size={22} />
+        </button>
+      </div>
+
+      <div className="progress-track">
+        <div style={{ width: `${percent}%` }} />
+      </div>
+
+      <article className={`reader-card ${isPlaying ? "playing" : ""}`}>
+        <p
+          className="reader-sentence"
+          onMouseUp={() => setSelection(window.getSelection()?.toString() ?? "")}
+          onTouchEnd={() => setSelection(window.getSelection()?.toString() ?? "")}
+        >
+          {sentence.english}
+        </p>
+        <label className="voice-picker">
+          Traducao em portugues
+          <textarea value={translation} onChange={(event) => setTranslation(event.target.value)} rows={4} />
+        </label>
+        <p className="translation-note">Sem API conectada ainda: traduza ou ajuste manualmente. A estrutura ja salva a traducao por frase.</p>
+      </article>
+
+      <div className="reader-controls">
+        <button onClick={() => move(-1)} disabled={currentIndex === 0}>
+          <ChevronLeft size={20} /> Voltar
+        </button>
+        <button className="listen-button" onClick={playCurrent}>
+          {isPlaying ? <Pause size={20} /> : <Play size={20} />} {isPlaying ? "Pausar" : "Play"}
+        </button>
+        <button onClick={() => move(1)} disabled={currentIndex === sentences.length - 1}>
+          Avancar <ChevronRight size={20} />
+        </button>
+      </div>
+
+      <div className="reading-options">
+        {[0.75, 1, 1.25, 1.5].map((value) => (
+          <button key={value} className={rate === value ? "selected" : ""} onClick={() => setRate(value)}>
+            {value}x
+          </button>
+        ))}
+        <label>
+          <input type="checkbox" checked={autoAdvance} onChange={(event) => setAutoAdvance(event.target.checked)} />
+          Avancar ao terminar
+        </label>
+      </div>
+
+      <div className="data-actions">
+        <button onClick={() => persistSentence()}><Save size={20} /> Salvar traducao</button>
+        <button onClick={() => onSaveFlashcard(reading, { ...sentence, translation })}>
+          <Plus size={20} /> Salvar frase
+        </button>
+        <button onClick={() => onSaveFlashcard(reading, { ...sentence, translation }, selection)} disabled={!selection.trim()}>
+          <Plus size={20} /> Salvar selecao
+        </button>
+      </div>
+
+      <button className="secondary-link" onClick={onBack}>Voltar para biblioteca</button>
+    </section>
+  );
+}
+
+function buildSentences(text, existingSentences = []) {
+  const translations = new Map(existingSentences.map((sentence) => [sentence.english, sentence]));
+  const parts = text
+    .replace(/\s+/g, " ")
+    .match(/[^.!?]+[.!?]+|[^.!?]+$/g) ?? [];
+
+  return parts
+    .map((part, index) => part.trim())
+    .filter(Boolean)
+    .map((english, index) => {
+      const previous = translations.get(english);
+      return {
+        id: previous?.id || `${index}-${english.slice(0, 24)}`,
+        english,
+        translation: previous?.translation || "",
+        read: previous?.read || false
+      };
+    });
 }
 
 function calculateStreak(days) {

@@ -5,7 +5,8 @@ export const CATEGORIES = [
   "Comercio exterior",
   "Reunioes",
   "Vida diaria",
-  "Conversacao"
+  "Conversacao",
+  "Leitura em Ingles"
 ];
 
 export function createEmptyPhrase() {
@@ -27,7 +28,9 @@ export function createEmptyPhrase() {
     errorCount: 0,
     easeFactor: 2.5,
     intervalDays: 0,
-    correctStreak: 0
+    correctStreak: 0,
+    studyDirection: "pt-en",
+    referenceTitle: ""
   };
 }
 

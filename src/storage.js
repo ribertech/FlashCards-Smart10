@@ -1,9 +1,10 @@
 import { CATEGORIES, createEmptyPhrase } from "./srs.js";
 
 const DB_NAME = "frases-ingles-srs";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const PHRASES = "phrases";
 const META = "meta";
+const READINGS = "readings";
 
 const samples = [
   {
@@ -45,6 +46,11 @@ function openDatabase() {
       }
       if (!db.objectStoreNames.contains(META)) {
         db.createObjectStore(META, { keyPath: "key" });
+      }
+      if (!db.objectStoreNames.contains(READINGS)) {
+        const store = db.createObjectStore(READINGS, { keyPath: "id" });
+        store.createIndex("category", "category");
+        store.createIndex("updatedAt", "updatedAt");
       }
     };
 
@@ -103,6 +109,47 @@ export async function savePhrase(phrase) {
 
 export async function deletePhrase(id) {
   await runRequest(PHRASES, "readwrite", (store) => store.delete(id));
+}
+
+export function createEmptyReading() {
+  const now = new Date().toISOString();
+  return {
+    id: "",
+    title: "",
+    source: "",
+    category: "Leitura em Ingles",
+    originalText: "",
+    notes: "",
+    sentences: [],
+    currentIndex: 0,
+    createdAt: now,
+    updatedAt: now
+  };
+}
+
+export async function getAllReadings() {
+  const rows = await runRequest(READINGS, "readonly", (store) => store.getAll());
+  return rows.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+}
+
+export async function saveReading(reading) {
+  const now = new Date().toISOString();
+  const normalized = {
+    ...createEmptyReading(),
+    ...reading,
+    id: reading.id || makeId(),
+    sentences: reading.sentences ?? [],
+    currentIndex: Math.max(0, reading.currentIndex ?? 0),
+    createdAt: reading.createdAt || now,
+    updatedAt: now
+  };
+
+  await runRequest(READINGS, "readwrite", (store) => store.put(normalized));
+  return normalized;
+}
+
+export async function deleteReading(id) {
+  await runRequest(READINGS, "readwrite", (store) => store.delete(id));
 }
 
 export async function getMeta() {
