@@ -1,0 +1,30 @@
+{
+  "name": "Smart English Cards",
+  "short_name": "Smart Cards",
+  "description": "Estudo pessoal de ingles com flashcards, leitura, audio e repeticao espacada.",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#f7faf9",
+  "theme_color": "#0f766e",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
