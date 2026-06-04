@@ -109,11 +109,12 @@ function useSpeech() {
     }
 
     window.speechSynthesis.cancel();
+    const cleanText = stripFormattingMarkers(text);
     const repeat = mode === "repeat" ? 2 : 1;
     const rate = options.rate ?? (mode === "slow" ? 0.72 : 0.95);
 
     for (let index = 0; index < repeat; index += 1) {
-      const utterance = new SpeechSynthesisUtterance(text);
+      const utterance = new SpeechSynthesisUtterance(cleanText);
       utterance.lang = "en-US";
       utterance.rate = rate;
       utterance.pitch = 1;
@@ -180,7 +181,7 @@ function App() {
   const filteredPhrases = useMemo(() => {
     return phrases.filter((phrase) => {
       const inCategory = categoryFilter === "Todas" || phrase.category === categoryFilter;
-      const text = `${phrase.portuguese} ${phrase.english} ${phrase.notes} ${phrase.category}`.toLowerCase();
+      const text = stripFormattingMarkers(`${phrase.portuguese} ${phrase.english} ${phrase.notes} ${phrase.category}`).toLowerCase();
       return inCategory && text.includes(query.toLowerCase());
     });
   }, [phrases, categoryFilter, query]);
@@ -697,11 +698,13 @@ function PhraseForm({ phrase, onCancel, onSave }) {
           Portugues
           <textarea ref={portugueseRef} value={draft.portuguese} onChange={(event) => update("portuguese", event.target.value)} rows={3} />
           <HighlightToolbar onApply={(type) => applyHighlight("portuguese", portugueseRef, type)} />
+          <TextPreview label="Previa" text={draft.portuguese} />
         </label>
         <label>
           Ingles
           <textarea ref={englishRef} value={draft.english} onChange={(event) => update("english", event.target.value)} rows={3} />
           <HighlightToolbar onApply={(type) => applyHighlight("english", englishRef, type)} />
+          <TextPreview label="Previa" text={draft.english} />
         </label>
         <label>
           Categoria
@@ -736,6 +739,16 @@ function HighlightToolbar({ onApply }) {
       <button type="button" className="swatch green" onClick={() => onApply("green")} title="Verde">
         Verde
       </button>
+    </div>
+  );
+}
+
+function TextPreview({ label, text }) {
+  if (!text.trim()) return null;
+  return (
+    <div className="text-preview">
+      <span>{label}</span>
+      <p>{renderFormattedText(text)}</p>
     </div>
   );
 }
@@ -1094,27 +1107,68 @@ function wrapHighlight(text, type) {
   return `[${type}]${text}[/${type}]`;
 }
 
+function stripFormattingMarkers(text = "") {
+  return String(text)
+    .replace(/\*\*\[(blue|amber|green)\]([\s\S]*?)\[\/?\1\]\*\*/g, "$2")
+    .replace(/\[(blue|amber|green)\]([\s\S]*?)\[\/?\1\]/g, "$2")
+    .replace(/\*\*([\s\S]*?)\*\*/g, "$1")
+    .replace(/\[(\/?)(blue|amber|green)\]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function renderFormattedText(text = "") {
   const nodes = [];
-  const pattern = /(\*\*[^*]+\*\*|\[(blue|amber|green)\][\s\S]*?\[\/\2\])/g;
+  const pattern = /(\*\*\[(blue|amber|green)\][\s\S]*?\[\/?(blue|amber|green)\]\*\*|\[(blue|amber|green)\][\s\S]*?\[\/?(blue|amber|green)\]|\*\*[\s\S]+?\*\*)/g;
+  let lastIndex = 0;
+  let match;
+
+  while ((match = pattern.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      nodes.push(...renderBoldText(text.slice(lastIndex, match.index), `plain-${lastIndex}`));
+    }
+    const token = match[0];
+    const boldColor = token.match(/^\*\*\[(blue|amber|green)\]([\s\S]*?)\[\/?\1\]\*\*$/);
+    const colorOnly = token.match(/^\[(blue|amber|green)\]([\s\S]*?)\[\/?\1\]$/);
+
+    if (boldColor) {
+      nodes.push(
+        <mark key={`${match.index}-${boldColor[1]}-bold`} className={`text-highlight ${boldColor[1]}`}>
+          <strong>{boldColor[2]}</strong>
+        </mark>
+      );
+    } else if (colorOnly) {
+      nodes.push(
+        <mark key={`${match.index}-${colorOnly[1]}`} className={`text-highlight ${colorOnly[1]}`}>
+          {renderBoldText(colorOnly[2], `${match.index}-${colorOnly[1]}`)}
+        </mark>
+      );
+    } else if (token.startsWith("**")) {
+      nodes.push(<strong key={`${match.index}-bold`}>{renderFormattedText(token.slice(2, -2))}</strong>);
+    }
+    lastIndex = pattern.lastIndex;
+  }
+
+  if (lastIndex < text.length) {
+    nodes.push(...renderBoldText(text.slice(lastIndex), `tail-${lastIndex}`));
+  }
+  return nodes.length > 0 ? nodes : text;
+}
+
+function renderBoldText(text, keyPrefix) {
+  const nodes = [];
+  const pattern = /\*\*([\s\S]+?)\*\*/g;
   let lastIndex = 0;
   let match;
 
   while ((match = pattern.exec(text)) !== null) {
     if (match.index > lastIndex) nodes.push(text.slice(lastIndex, match.index));
-    const token = match[0];
-    if (token.startsWith("**")) {
-      nodes.push(<strong key={`${match.index}-bold`}>{token.slice(2, -2)}</strong>);
-    } else {
-      const color = match[2];
-      const content = token.replace(new RegExp(`^\\[${color}\\]|\\[/${color}\\]$`, "g"), "");
-      nodes.push(<mark key={`${match.index}-${color}`} className={`text-highlight ${color}`}>{content}</mark>);
-    }
+    nodes.push(<strong key={`${keyPrefix}-${match.index}`}>{match[1]}</strong>);
     lastIndex = pattern.lastIndex;
   }
 
   if (lastIndex < text.length) nodes.push(text.slice(lastIndex));
-  return nodes.length > 0 ? nodes : text;
+  return nodes;
 }
 
 function calculateStreak(days) {

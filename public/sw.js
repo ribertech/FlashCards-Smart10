@@ -1,4 +1,4 @@
-const CACHE_NAME = "smart-english-cards-v4";
+const CACHE_NAME = "smart-english-cards-v6";
 const BASE_URL = self.registration.scope;
 const ASSETS = [
   BASE_URL,
